@@ -1,6 +1,7 @@
 // Converts the vendored lichess-org/chess-openings TSVs (CC0) into a compact,
 // position-keyed lookup at src/data/openings.json. Skips work when up to date.
-import { readFileSync, writeFileSync, statSync, existsSync, readdirSync } from 'node:fs';
+import './check-node.mjs';
+import { readFileSync, writeFileSync, statSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Chess } from 'chess.js';
@@ -40,5 +41,7 @@ for (const file of tsvs) {
 }
 for (const k of Object.keys(names)) book.delete(k);
 
+// src/data/ holds only this generated (gitignored) file, so a fresh clone does not have it.
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify({ names, book: [...book] }));
 console.log(`openings.json: ${lines} lines, ${Object.keys(names).length} named positions, ${book.size} other book positions, ${(statSync(out).size / 1024).toFixed(0)} KB`);

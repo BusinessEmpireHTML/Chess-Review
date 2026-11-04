@@ -5,11 +5,14 @@
   "description": "Client-only chess game review: Chess.com games, Stockfish in the browser, move classifications.",
   "license": "GPL-3.0-or-later",
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "prepare-assets": "node scripts/copy-engine.mjs && node scripts/build-openings.mjs",
     "dev": "npm run prepare-assets && vite",
     "build": "npm run prepare-assets && tsc --noEmit && vite build",
-    "build:full": "FULL_ENGINE=1 npm run build",
+    "build:full": "node scripts/copy-engine.mjs --full && node scripts/build-openings.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
     "pretest": "node scripts/build-openings.mjs",
     "test": "vitest run",

@@ -7,6 +7,9 @@ No accounts, no backend, no database, no analytics. The only network calls go to
 
 ## Run it
 
+Requires **Node.js 20.19+ or 22.12+** (Vite 8's minimum; the scripts stop with a clear
+message on older versions). Works on Windows, macOS, and Linux.
+
 ```bash
 npm install
 npm run dev          # http://localhost:5173
