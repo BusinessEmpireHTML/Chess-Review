@@ -1881,3 +1881,19 @@ main {
   background: #2c313a;
   box-shadow: inset 0 0 0 2px #59616e;
 }
+
+/* Notched phones in landscape, and the full-screen home-screen app. */
+@supports (padding: env(safe-area-inset-left)) {
+  .app {
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+  }
+  @media (max-width: 900px) {
+    .app {
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+    }
+  }
+}

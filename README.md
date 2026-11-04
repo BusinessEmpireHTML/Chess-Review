@@ -25,6 +25,15 @@ with no special headers. Browsers block Web Workers and WASM on `file://`, so to
 build locally, serve it (`npm run preview`, or `python3 -m http.server -d dist`) rather
 than double-clicking `index.html`.
 
+### Hosting on GitHub Pages (use it on your phone)
+
+`.github/workflows/deploy.yml` tests, builds, and publishes the site on every push to
+`main`. One-time setup in the GitHub repository: **Settings → Pages → Source: GitHub
+Actions**. The site is then at `https://businessempirehtml.github.io/Chess-Review/`. On a
+phone, use **Add to Home Screen** (Safari's Share menu, or Chrome's ⋮ menu) to open it
+full-screen with its own icon. Analysis is slower on phones than on a computer, so the
+**Fast** depth is a good choice there.
+
 ### Optional: the full-strength engine
 
 ```bash
