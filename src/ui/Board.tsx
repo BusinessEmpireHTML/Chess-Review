@@ -1,7 +1,7 @@
-import { Chessground } from 'chessground';
-import type { Api } from 'chessground/api';
-import type { DrawBrush, DrawShape } from 'chessground/draw';
-import type { Key } from 'chessground/types';
+import { Chessground } from '@lichess-org/chessground';
+import type { Api } from '@lichess-org/chessground/api';
+import type { DrawBrush, DrawShape } from '@lichess-org/chessground/draw';
+import type { Key } from '@lichess-org/chessground/types';
 import { useEffect, useRef } from 'preact/hooks';
 import type { Classification } from '../lib/types';
 import { Badge } from './Badge';
