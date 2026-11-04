@@ -121,3 +121,68 @@
     border-radius: 6px;
   }
 }
+
+/* Interactive board: legal-move dots, capture rings, selection. */
+.board cg-board square.move-dest {
+  background: radial-gradient(rgba(16, 20, 26, 0.38) 19%, rgba(0, 0, 0, 0) 20%);
+  cursor: pointer;
+}
+.board cg-board square.oc.move-dest {
+  background: radial-gradient(transparent 0%, transparent 76%, rgba(16, 20, 26, 0.38) 77%);
+}
+.board cg-board square.move-dest:hover {
+  background: rgba(226, 181, 90, 0.35);
+}
+.board cg-board square.selected {
+  background-color: rgba(226, 181, 90, 0.5);
+}
+.board-movable .cg-wrap piece {
+  cursor: grab;
+}
+.board .cg-wrap piece.dragging {
+  cursor: grabbing;
+}
+
+/* Promotion picker. */
+.promo-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 10, 13, 0.55);
+  border-radius: 8px;
+  animation: fade 0.15s ease-out;
+}
+.promo.cg-wrap {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: min(86%, 380px);
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+.promo-btn {
+  position: relative;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 10px;
+  background: var(--light);
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), background 0.12s;
+}
+.promo-btn:hover {
+  transform: translateY(-2px);
+  background: #f3e2b6;
+}
+.promo-btn piece {
+  position: absolute;
+  inset: 6%;
+  width: 88%;
+  height: 88%;
+  transform: none;
+  pointer-events: none;
+}

@@ -2,6 +2,8 @@
 
 Type a Chess.com username, pick a game, and get a move-by-move Stockfish review with
 Chess.com-style classifications, Lichess-method accuracy, an eval graph, and arrows.
+You can also try your own moves from any position in a review, or play Stockfish at
+one of eight levels and then review that game.
 No accounts, no backend, no database, no analytics. The only network calls go to
 `api.chess.com` (enforced with a Content-Security-Policy in `index.html`).
 
@@ -49,6 +51,24 @@ only the 1.8 MB "lite" network.
   TSVs are vendored in `data/openings/` and compiled into a position-keyed lookup at build
   time. Transpositions still count as book. The lookup loads lazily as its own chunk.
 
+## Practice and play
+
+- **Try your own moves during a review.** The board is playable at every move.
+  Playing the move from the actual game just steps forward. Any other move starts a
+  side line. Stockfish answers for the other side (turn off "Stockfish replies" to
+  play both sides), and each of your tries gets the same Best/Mistake/Blunder grade
+  and explanation as a game move. "Back to game" (or Esc) returns to the move you
+  branched from.
+- **Play Stockfish.** The "Play Stockfish" tab starts a game as White, Black, or a
+  random color at levels 1–8. Take-backs are allowed, and the game survives a page
+  refresh. When it ends, "Review this game" opens the full review.
+
+Stockfish's own strength limiter bottoms out around 1320 Elo, so the lower levels
+work differently. Each level searches to a shallow depth with several candidate
+lines and picks one at random, weighted by how much it gives up:
+`weight = exp(-winPercentLoss / temperature)`. Low levels also sometimes play a
+random legal move. All of these numbers are in **`src/config/play.ts`**.
+
 ## Tuning classifications
 
 Every threshold lives in **`src/config/classification.ts`**. EPL is the drop in expected
@@ -83,12 +103,15 @@ bonus" to each move. It is off by default here to match the stated formula; set
 ```
 scripts/        copy-engine.mjs (Stockfish → public/engine), build-openings.mjs (TSV → JSON)
 data/openings/  vendored lichess chess-openings TSVs (CC0)
-src/config/     classification.ts: all thresholds
+src/config/     classification.ts: all thresholds · play.ts: bot levels
 src/lib/        winprob, accuracy, material (sacrifice search), classify, review,
-                explain, openings, pgn, chesscom (API client), cache (IndexedDB), storage
-src/engine/     uci.ts (UCI parser), engine.ts (worker wrapper), pool.ts (worker pool)
+                explain, openings, pgn, chesscom (API client), cache (IndexedDB), storage,
+                explore (side lines, grading tries), botpick (bot move choice), play
+src/engine/     uci.ts (UCI parser), engine.ts (worker wrapper), pool.ts (worker pool),
+                interactive.ts (dedicated worker for practice and play)
 src/ui/         Preact components: App, Home, Review, Board (chessground), EvalBar,
-                EvalGraph, MoveList, Badge, useAnalysis
+                EvalGraph, MoveList, Badge, ExplorePanel, Play, PlaySetup,
+                useAnalysis, useExplore
 tests/          Vitest suites (classification, accuracy, mate edge cases, UCI, API, cache)
 ```
 
@@ -102,7 +125,8 @@ because the build sandbox couldn't reach it.
 
 ## Keyboard
 
-`←` / `→` step through moves · `Home` / `End` jump to the start or end · `F` flips the board.
+`←` / `→` step through moves (or through a side line) · `Home` / `End` jump to the start or
+end · `Esc` leaves a side line · `F` flips the board.
 
 ## Licenses
 

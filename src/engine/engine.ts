@@ -7,6 +7,8 @@ export interface AnalysisJob {
   /** UCI moves from the start to the position to analyze (gives the engine repetition history). */
   moves: string[];
   depth: number;
+  /** Lines to report; defaults to the MultiPV the engine was started with. */
+  multiPv?: number;
 }
 
 export interface LoadProgress {
@@ -24,6 +26,7 @@ export class UciEngine {
   private listeners = new Set<(line: string) => void>();
   private failures = new Set<(err: Error) => void>();
   private searching = false;
+  private multiPv = 1;
   /** Serializes newGame/analyze so a new run never talks over a search that is still stopping. */
   private lock: Promise<unknown> = Promise.resolve();
   dead = false;
@@ -89,6 +92,7 @@ export class UciEngine {
     this.send('uci');
     await ok;
     for (const [name, value] of Object.entries(options)) this.send(`setoption name ${name} value ${value}`);
+    if (options.MultiPV !== undefined) this.multiPv = Number(options.MultiPV);
     await this.ready();
   }
 
@@ -116,8 +120,21 @@ export class UciEngine {
     return this.exclusive(() => this.search(job, onInfo));
   }
 
+  /**
+   * Like analyze, but checks `shouldRun` when the job reaches the front of
+   * the queue and skips it (resolving null) if it is no longer wanted.
+   */
+  analyzeIf(job: AnalysisJob, shouldRun: () => boolean, onInfo?: (info: InfoLine) => void): Promise<PositionEval | null> {
+    return this.exclusive(() => (shouldRun() ? this.search(job, onInfo) : Promise.resolve(null)));
+  }
+
   private async search(job: AnalysisJob, onInfo?: (info: InfoLine) => void): Promise<PositionEval> {
     if (this.dead) throw new Error('Engine terminated.');
+    if (job.multiPv !== undefined && job.multiPv !== this.multiPv) {
+      this.send(`setoption name MultiPV value ${job.multiPv}`);
+      this.multiPv = job.multiPv;
+      await this.ready();
+    }
     this.searching = true;
     const collector = new LineCollector();
     try {

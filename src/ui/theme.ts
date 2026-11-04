@@ -32,3 +32,11 @@ export function withAlpha(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
+
+/** True while the user is typing in a text field (keyboard shortcuts should not fire). */
+export function isTyping(target: EventTarget | null): boolean {
+  const t = target as HTMLElement | null;
+  if (!t) return false;
+  if (t.isContentEditable || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
+  return t.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range'].includes((t as HTMLInputElement).type);
+}

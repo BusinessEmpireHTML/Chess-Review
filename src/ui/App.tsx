@@ -11,10 +11,26 @@ import {
   playerColor,
   type ChessComGame,
 } from '../lib/chesscom';
+import { replay } from '../lib/explore';
 import { gameFingerprint, parseGame } from '../lib/pgn';
+import { detectResult } from '../lib/play';
 import { load, save } from '../lib/storage';
-import { Home, type Filters, type ListState } from './Home';
+import { Home, type Filters, type HomeTab, type ListState } from './Home';
+import { Play, SAVED_GAME_KEY, type SavedGame } from './Play';
 import { Review, type GameSource } from './Review';
+
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+/** The saved bot game, if it is still in progress (and not corrupt). */
+function unfinishedGame(): SavedGame | null {
+  const g = load<SavedGame | null>(SAVED_GAME_KEY, null);
+  try {
+    if (!g || g.resigned || !Array.isArray(g.moves) || !g.moves.length) return null;
+    return detectResult(replay(START_FEN, g.moves)) ? null : g;
+  } catch {
+    return null;
+  }
+}
 
 const EMPTY_LIST: ListState = { username: '', archives: [], loaded: 0, games: [], variants: 0, loading: false, error: null };
 
@@ -51,8 +67,9 @@ function sourceFromPgn(pgn: string, rememberedUser: string): GameSource {
 export function App() {
   const [list, setList] = useState<ListState>(EMPTY_LIST);
   const [filters, setFilters] = useState<Filters>({ time: 'all', result: 'all' });
-  const [tab, setTab] = useState<'chesscom' | 'pgn'>('chesscom');
+  const [tab, setTab] = useState<HomeTab>(() => (location.hash === '#play' ? 'play' : 'chesscom'));
   const [source, setSource] = useState<GameSource | null>(null);
+  const [play, setPlay] = useState<SavedGame | null>(() => (location.hash === '#play' ? unfinishedGame() : null));
   const [preset, setPreset] = useState<AnalysisPreset>(() => {
     const p = load<string>('preset', 'standard');
     return p in ANALYSIS_PRESETS ? (p as AnalysisPreset) : 'standard';
@@ -70,13 +87,14 @@ export function App() {
     loadEngineFlavors().then(setFlavors);
   }, []);
 
-  // Back button returns from a review to the list.
+  // The back button leaves a review or a game. A refresh during a bot game resumes it.
   useEffect(() => {
     const onPop = () => {
       if (location.hash !== '#review') setSource(null);
+      if (location.hash !== '#play') setPlay(null);
     };
     window.addEventListener('popstate', onPop);
-    if (location.hash === '#review') history.replaceState(null, '', location.pathname + location.search);
+    if (location.hash === '#review' || (location.hash === '#play' && !play)) history.replaceState(null, '', location.pathname + location.search);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
@@ -145,14 +163,25 @@ export function App() {
   };
 
   const back = () => {
-    if (location.hash === '#review') history.back();
-    else setSource(null);
+    if (location.hash === '#review' || location.hash === '#play') history.back();
+    else {
+      setSource(null);
+      setPlay(null);
+    }
+  };
+
+  const startPlay = (g: SavedGame) => {
+    save(SAVED_GAME_KEY, g);
+    setTab('play'); // so Back from the game (or its review) lands on the Play tab
+    setPlay(g);
+    history.pushState(null, '', '#play');
+    window.scrollTo(0, 0);
   };
 
   return (
     <div class="app">
       <header class="topbar">
-        <button class="brand" onClick={() => source && back()} aria-label="Ply home">
+        <button class="brand" onClick={() => (source || play) && back()} aria-label="Ply home">
           <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
             <rect x="2" y="2" width="28" height="28" rx="8" class="brand-tile" />
             <path d="M9 22.5h14M11 22.5l1.6-7.5h6.8l1.6 7.5M12.4 15c-1.4-1-2-2.4-2-3.7 0-2.6 2.5-4.3 5.6-4.3s5.6 1.7 5.6 4.3c0 1.3-.6 2.7-2 3.7" class="brand-mark" />
@@ -181,6 +210,22 @@ export function App() {
             }}
             onBack={back}
           />
+        ) : play ? (
+          <Play
+            key={play.startedAt}
+            initial={play}
+            flavor={flavor}
+            onReview={(s) => {
+              setPlay(null);
+              setSource(s);
+              history.replaceState(null, '', '#review');
+              window.scrollTo(0, 0);
+            }}
+            onNewGame={() => {
+              setTab('play');
+              back();
+            }}
+          />
         ) : (
           <Home
             list={list}
@@ -193,6 +238,12 @@ export function App() {
             onOpenPgn={(pgn) => open(sourceFromPgn(pgn, lastUser.current))}
             tab={tab}
             onTab={setTab}
+            savedGame={tab === 'play' ? unfinishedGame() : null}
+            onPlay={(color, level) => startPlay({ color, level, moves: [], resigned: false, startedAt: Date.now() })}
+            onResume={() => {
+              const g = unfinishedGame();
+              if (g) startPlay(g);
+            }}
           />
         )}
       </main>

@@ -9,9 +9,11 @@ interface Props {
   /** Current position index (0 = start, i = after ply i-1). */
   current: number;
   onSelect: (position: number) => void;
+  /** Show classification badges (off while playing a game). */
+  badges?: boolean;
 }
 
-export function MoveList({ plies, moves, current, onSelect }: Props) {
+export function MoveList({ plies, moves, current, onSelect, badges = true }: Props) {
   const box = useRef<HTMLDivElement>(null);
 
   // Keep the current move visible by scrolling only the list, never the page.
@@ -38,7 +40,7 @@ export function MoveList({ plies, moves, current, onSelect }: Props) {
     const pos = p.index + 1;
     return (
       <button type="button" class={`mv ${pos === current ? 'active' : ''} ${report ? 'mv-' + report.classification : ''}`} onClick={() => onSelect(pos)}>
-        <span class="mv-badge">{report ? <Badge c={report.classification} size={16} /> : <span class="mv-pending" />}</span>
+        {badges && <span class="mv-badge">{report ? <Badge c={report.classification} size={16} /> : <span class="mv-pending" />}</span>}
         <span class="mv-san">{p.san}</span>
       </button>
     );

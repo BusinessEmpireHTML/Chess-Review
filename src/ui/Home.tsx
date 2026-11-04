@@ -10,6 +10,11 @@ import {
   type TimeClass,
 } from '../lib/chesscom';
 import { parseGame, PgnError } from '../lib/pgn';
+import type { Color } from '../lib/types';
+import type { SavedGame } from './Play';
+import { PlaySetup } from './PlaySetup';
+
+export type HomeTab = 'chesscom' | 'pgn' | 'play';
 
 export interface ListState {
   username: string;
@@ -37,8 +42,11 @@ interface Props {
   onLoadOlder: () => void;
   onOpenGame: (game: ChessComGame) => void;
   onOpenPgn: (pgn: string) => void;
-  tab: 'chesscom' | 'pgn';
-  onTab: (t: 'chesscom' | 'pgn') => void;
+  tab: HomeTab;
+  onTab: (t: HomeTab) => void;
+  savedGame: SavedGame | null;
+  onPlay: (color: Color, level: number) => void;
+  onResume: () => void;
 }
 
 const TIME_LABELS: Record<TimeClass, string> = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', daily: 'Daily' };
@@ -143,6 +151,9 @@ export function Home(props: Props) {
           <button role="tab" aria-selected={tab === 'pgn'} class={tab === 'pgn' ? 'on' : ''} onClick={() => onTab('pgn')}>
             Paste PGN
           </button>
+          <button role="tab" aria-selected={tab === 'play'} class={tab === 'play' ? 'on' : ''} onClick={() => onTab('play')}>
+            Play Stockfish
+          </button>
         </div>
 
         {tab === 'chesscom' ? (
@@ -170,6 +181,8 @@ export function Home(props: Props) {
               {list.loading && !list.games.length ? 'Loading…' : 'Find games'}
             </button>
           </form>
+        ) : tab === 'play' ? (
+          <PlaySetup saved={props.savedGame} onStart={props.onPlay} onResume={props.onResume} />
         ) : (
           <div class="pgn-box">
             <textarea

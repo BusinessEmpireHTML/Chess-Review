@@ -34,6 +34,15 @@ export async function loadEngineFlavors(): Promise<EngineFlavor[]> {
   }
 }
 
+export function engineUrl(flavor: EngineFlavor): string {
+  return new URL(`engine/${flavor.file}`, document.baseURI).href;
+}
+
+/** Large builds (the full network) need far longer to download and compile. */
+export function startTimeout(flavor: EngineFlavor): number {
+  return flavor.sizeMB > 20 ? 300_000 : 60_000;
+}
+
 export function defaultPoolSize(flavor: EngineFlavor): number {
   const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
   const memory = typeof navigator !== 'undefined' ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory : undefined;
@@ -68,7 +77,7 @@ export class EnginePool {
     this.engines = this.engines.filter((e) => !e.dead);
     if (this.engines.length >= this.size) return Promise.resolve();
     this.starting ??= (async () => {
-      const url = new URL(`engine/${this.flavor.file}`, document.baseURI).href;
+      const url = engineUrl(this.flavor);
       const fresh: UciEngine[] = [];
       for (let i = this.engines.length; i < this.size; i++) {
         const e = new UciEngine(url);
@@ -76,7 +85,7 @@ export class EnginePool {
         fresh.push(e);
       }
       const results = await Promise.allSettled(
-        fresh.map((e) => e.init({ MultiPV: 2, Hash: this.flavor.hashMB }, this.flavor.sizeMB > 20 ? 300_000 : 60_000)),
+        fresh.map((e) => e.init({ MultiPV: 2, Hash: this.flavor.hashMB }, startTimeout(this.flavor))),
       );
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') this.engines.push(fresh[i]);

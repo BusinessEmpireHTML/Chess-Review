@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ANALYSIS_PRESETS, type AnalysisPreset } from '../config/classification';
 import type { EngineFlavor } from '../engine/pool';
 import { explain, LABELS } from '../lib/explain';
+import { isPromotion, legalDests } from '../lib/explore';
 import { detectBook, loadOpeningBook, type BookInfo } from '../lib/openings';
 import { parseGame, PgnError, sideToMove, uciLineToSan, uciToSan, type ParsedGame, type Ply } from '../lib/pgn';
 import { buildReport, positionEval, type GameReport } from '../lib/review';
@@ -11,8 +12,11 @@ import { Badge } from './Badge';
 import { Board, type Arrow } from './Board';
 import { EvalBar } from './EvalBar';
 import { EvalGraph } from './EvalGraph';
+import { ExplorePanel } from './ExplorePanel';
 import { MoveList } from './MoveList';
 import { useAnalysis, type AnalysisStatus } from './useAnalysis';
+import { isTyping } from './theme';
+import { useExplore } from './useExplore';
 
 export interface GameSource {
   /** Cache identity: the game URL, or a fingerprint for pasted PGNs. */
@@ -39,9 +43,13 @@ interface Props {
 const EMPTY_BOOK: BookInfo = { isBook: [], openingAtPly: [], opening: undefined };
 
 function viewAt(game: ParsedGame, evals: (PositionEval | undefined)[], i: number): WhiteView | null {
-  const pe = positionEval(game, evals, i);
+  return viewOf(game.fens[i], positionEval(game, evals, i));
+}
+
+/** Eval-bar view of any position from its engine result (or terminal state). */
+function viewOf(fen: string, pe: PositionEval | undefined): WhiteView | null {
   if (!pe) return null;
-  const stm = sideToMove(game.fens[i]);
+  const stm = sideToMove(fen);
   if (pe.terminal === 'checkmate') return { win: stm === 'w' ? 0 : 100, label: stm === 'w' ? '0-1' : '1-0', cp: 0 };
   if (pe.terminal === 'draw') return { win: 50, label: '½-½', cp: 0 };
   return pe.lines[0] ? whiteView(pe.lines[0].score, stm) : null;
@@ -158,18 +166,38 @@ export function Review({ source, preset, onPreset, flavors, flavor, onFlavor, on
     if (ply > 0) prioritize([ply - 1, ply]);
   }, [ply]);
 
+  const ex = useExplore({ game, gameEvals: evals, depth, flavor, ply, setPly: go });
+  const exRef = useRef(ex);
+  exRef.current = ex;
+  /** Jump within the real game, leaving any side line. */
+  const goMain = (p: number) => {
+    if (exRef.current.active) exRef.current.exit();
+    go(p);
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (e.altKey || e.ctrlKey || e.metaKey || (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) || t?.isContentEditable) return;
-      const actions: Record<string, () => void> = {
-        ArrowLeft: () => setPly((p) => Math.max(0, p - 1)),
-        ArrowRight: () => setPly((p) => Math.min(last, p + 1)),
-        Home: () => setPly(0),
-        End: () => setPly(last),
-        f: () => setOrientation((o) => (o === 'white' ? 'black' : 'white')),
-        F: () => setOrientation((o) => (o === 'white' ? 'black' : 'white')),
-      };
+      if (e.altKey || e.ctrlKey || e.metaKey || isTyping(e.target)) return;
+      const x = exRef.current;
+      const flip = () => setOrientation((o) => (o === 'white' ? 'black' : 'white'));
+      const actions: Record<string, () => void> = x.active
+        ? {
+            ArrowLeft: x.back,
+            ArrowRight: x.forward,
+            Escape: x.exit,
+            Home: () => goMain(0),
+            End: () => goMain(last),
+            f: flip,
+            F: flip,
+          }
+        : {
+            ArrowLeft: () => setPly((p) => Math.max(0, p - 1)),
+            ArrowRight: () => setPly((p) => Math.min(last, p + 1)),
+            Home: () => setPly(0),
+            End: () => setPly(last),
+            f: flip,
+            F: flip,
+          };
       const act = actions[e.key];
       if (act) {
         e.preventDefault();
@@ -194,15 +222,24 @@ export function Review({ source, preset, onPreset, flavors, flavor, onFlavor, on
 
   const move = ply > 0 ? game.plies[ply - 1] : null;
   const moveReport = ply > 0 ? report.moves[ply - 1] : null;
-  const fen = game.fens[ply];
-  const currentEval = positionEval(game, evals, ply);
+
+  // What the board shows: the real game at `ply`, or the explored side line.
+  const xs = ex.active ? ex.state : null;
+  const xMove = xs ? (xs.cursor > 0 ? xs.moves[xs.cursor - 1] : xs.basePly > 0 ? game.plies[xs.basePly - 1] : null) : null;
+  const xGrade = xs && xs.cursor > 0 ? ex.grades[xs.cursor - 1] : null;
+  const shownMove = xs ? xMove : move;
+  const shownReport = xs ? xGrade : moveReport;
+  const fen = xs && ex.fen ? ex.fen : game.fens[ply];
+  const currentEval = xs ? ex.currentEval : positionEval(game, evals, ply);
+  const shownView = xs ? viewOf(fen, ex.currentEval) : views[ply];
 
   const arrows: Arrow[] = [];
-  if (move && moveReport) {
-    const best = moveReport.evaluation.bestMove;
+  if (shownMove && shownReport) {
+    const best = shownReport.evaluation.bestMove;
     arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), classification: 'best' });
-    if (!moveReport.evaluation.playedIsBest) arrows.push({ from: move.from, to: move.to, classification: moveReport.classification });
+    if (!shownReport.evaluation.playedIsBest) arrows.push({ from: shownMove.from, to: shownMove.to, classification: shownReport.classification });
   }
+  const dests = legalDests(fen); // ~1 ms; computed here because hooks can't follow the early return above
 
   const bestSan = move && moveReport ? uciToSan(move.fenBefore, moveReport.evaluation.bestMove) : '';
   const explanation =
@@ -299,29 +336,44 @@ export function Review({ source, preset, onPreset, flavors, flavor, onFlavor, on
 
       <section class="board-col">
         <div class="board-row">
-          <EvalBar view={views[ply]} orientation={orientation} />
+          <EvalBar view={shownView} orientation={orientation} />
           <Board
             fen={fen}
             orientation={orientation}
-            lastMove={move ? [move.from, move.to] : undefined}
-            classification={moveReport?.classification}
+            lastMove={shownMove ? [shownMove.from, shownMove.to] : undefined}
+            classification={shownReport?.classification}
             arrows={arrows}
-            inCheck={!!move && /[+#]$/.test(move.san)}
-            plyKey={ply}
+            inCheck={!!shownMove && /[+#]$/.test(shownMove.san)}
+            plyKey={xs ? `x${xs.cursor}-${xs.moves.length}` : ply}
+            movable={{ color: ex.movableColor, dests, isPromotion: (from, to) => isPromotion(fen, from, to), onMove: ex.play }}
           />
         </div>
         <nav class="controls" aria-label="Move navigation">
-          <button class="btn icon" onClick={() => go(0)} disabled={ply === 0} title="First move (Home)" aria-label="First move">
+          <button class="btn icon" onClick={() => goMain(0)} disabled={!xs && ply === 0} title="First move (Home)" aria-label="First move">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 5l-8 7 8 7z" /></svg>
           </button>
-          <button class="btn icon" onClick={() => go(ply - 1)} disabled={ply === 0} title="Previous (←)" aria-label="Previous move">
+          <button
+            class="btn icon"
+            onClick={() => (xs ? ex.back() : go(ply - 1))}
+            disabled={!xs && ply === 0}
+            title="Previous (←)"
+            aria-label="Previous move"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5l-8 7 8 7z" /></svg>
           </button>
-          <span class="controls-pos">{move ? moveLabel(move) : 'Start'}</span>
-          <button class="btn icon" onClick={() => go(ply + 1)} disabled={ply === last} title="Next (→)" aria-label="Next move">
+          <span class={`controls-pos ${xs ? 'controls-pos-explore' : ''}`}>
+            {xs ? (xMove && xs.cursor > 0 ? `Line · ${xMove.san}` : 'Line · start') : move ? moveLabel(move) : 'Start'}
+          </span>
+          <button
+            class="btn icon"
+            onClick={() => (xs ? ex.forward() : go(ply + 1))}
+            disabled={xs ? xs.cursor === xs.moves.length : ply === last}
+            title="Next (→)"
+            aria-label="Next move"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l8 7-8 7z" /></svg>
           </button>
-          <button class="btn icon" onClick={() => go(last)} disabled={ply === last} title="Last move (End)" aria-label="Last move">
+          <button class="btn icon" onClick={() => goMain(last)} disabled={!xs && ply === last} title="Last move (End)" aria-label="Last move">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 5l8 7-8 7z" /></svg>
           </button>
           <button
@@ -338,6 +390,9 @@ export function Review({ source, preset, onPreset, flavors, flavor, onFlavor, on
       </section>
 
       <section class="side">
+        {xs ? (
+          <ExplorePanel ex={ex} game={game} />
+        ) : (
         <div class={`coach card ${moveReport ? 'coach-' + moveReport.classification : ''}`} aria-live="polite">
           {move && moveReport && explanation ? (
             <>
@@ -378,10 +433,12 @@ export function Review({ source, preset, onPreset, flavors, flavor, onFlavor, on
               </div>
             </div>
           )}
+          {ex.movableColor && <p class="coach-tip">Move a piece to try your own idea from here.</p>}
         </div>
+        )}
 
         <div class="card graph-card">
-          <EvalGraph whiteWin={report.whiteWin} views={views} moves={report.moves} plies={game.plies} current={ply} onSelect={go} />
+          <EvalGraph whiteWin={report.whiteWin} views={views} moves={report.moves} plies={game.plies} current={xs ? xs.basePly : ply} onSelect={goMain} />
         </div>
 
         <div class="card engine">
@@ -406,7 +463,7 @@ export function Review({ source, preset, onPreset, flavors, flavor, onFlavor, on
         </div>
 
         <div class="card moves-card">
-          <MoveList plies={game.plies} moves={report.moves} current={ply} onSelect={go} />
+          <MoveList plies={game.plies} moves={report.moves} current={xs ? xs.basePly : ply} onSelect={goMain} />
         </div>
 
         <div class="card counts">
