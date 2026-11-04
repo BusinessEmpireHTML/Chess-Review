@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0c0e11" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://api.chess.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'"
+    />
+    <meta name="description" content="Chess game review in your browser: pick a Chess.com game and get a move-by-move Stockfish analysis with classifications." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='8' fill='%23e2b55a'/%3E%3Cpath d='M9 22.5h14M11 22.5l1.6-7.5h6.8l1.6 7.5M12.4 15c-1.4-1-2-2.4-2-3.7 0-2.6 2.5-4.3 5.6-4.3s5.6 1.7 5.6 4.3c0 1.3-.6 2.7-2 3.7' fill='none' stroke='%2314171c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <title>Ply — chess game review</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

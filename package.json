@@ -1,0 +1,38 @@
+{
+  "name": "chess-review",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Client-only chess game review: Chess.com games, Stockfish in the browser, move classifications.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "prepare-assets": "node scripts/copy-engine.mjs && node scripts/build-openings.mjs",
+    "dev": "npm run prepare-assets && vite",
+    "build": "npm run prepare-assets && tsc --noEmit && vite build",
+    "build:full": "FULL_ENGINE=1 npm run build",
+    "preview": "vite preview",
+    "pretest": "node scripts/build-openings.mjs",
+    "test": "vitest run",
+    "pretest:watch": "node scripts/build-openings.mjs",
+    "test:watch": "vitest",
+    "pretypecheck": "node scripts/build-openings.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "chess.js": "^1.4.0",
+    "chessground": "^9.2.1",
+    "preact": "^10.29.8",
+    "stockfish": "^19.0.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@preact/preset-vite": "^2.10.6",
+    "@types/node": "^22.20.5",
+    "fake-indexeddb": "^6.2.7",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^4.1.12"
+  }
+}

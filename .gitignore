@@ -1,0 +1,6 @@
+node_modules
+dist
+public/engine
+# generated from data/openings/*.tsv by scripts/build-openings.mjs
+src/data/openings.json
+*.log
