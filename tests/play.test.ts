@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { botLevel } from '../src/config/play';
 import { replay } from '../src/lib/explore';
 import { parseGame } from '../src/lib/pgn';
-import { botName, buildPlayPgn, describeResult, detectResult, resignation } from '../src/lib/play';
+import { appendUserMove, botName, buildPlayPgn, describeResult, detectResult, resignation } from '../src/lib/play';
 
 const START = new Chess().fen();
 
@@ -49,5 +49,28 @@ describe('buildPlayPgn', () => {
   });
   it('marks unfinished games with *', () => {
     expect(parseGame(buildPlayPgn({ moves: ['e2e4'], userColor: 'w', level: botLevel(1), result: null })).headers.Result).toBe('*');
+  });
+});
+
+describe('appendUserMove (never trust a lagging board)', () => {
+  const beforePromo = ['a2a4', 'b7b5', 'a4b5', 'a7a6', 'b5a6', 'c8b7', 'a6b7', 'e7e6'];
+
+  it('adds a legal move on the user\'s turn, including a promotion', () => {
+    expect(appendUserMove(['e2e4', 'e7e5'], 'g1f3', 'w')).toEqual(['e2e4', 'e7e5', 'g1f3']);
+    expect(appendUserMove(beforePromo, 'b7a8q', 'w')).toEqual([...beforePromo, 'b7a8q']);
+  });
+
+  it('ignores a move from a stale board after a take-back', () => {
+    // The promotion picker was opened at b7, then the user took back two plies.
+    const afterTakeBack = beforePromo.slice(0, 6);
+    expect(appendUserMove(afterTakeBack, 'b7a8q', 'w')).toBe(afterTakeBack);
+    // ...but the move that is actually legal there still works.
+    expect(appendUserMove(afterTakeBack, 'a6b7', 'w')).toEqual([...afterTakeBack, 'a6b7']);
+  });
+
+  it('ignores moves when it is not the user\'s turn or the game is over', () => {
+    expect(appendUserMove(['e2e4'], 'e7e5', 'w')).toEqual(['e2e4']);
+    const mated = ['f2f3', 'e7e5', 'g2g4', 'd8h4'];
+    expect(appendUserMove(mated, 'a2a3', 'w')).toBe(mated);
   });
 });

@@ -53,6 +53,15 @@ const PROMOTION_PIECES = [
   ['b', 'bishop'],
 ] as const;
 
+interface PendingPromotion {
+  from: string;
+  to: string;
+  color: 'white' | 'black';
+  /** Position and orientation the picker was opened in. */
+  fen: string;
+  orientation: 'white' | 'black';
+}
+
 function squarePosition(square: string, orientation: 'white' | 'black') {
   const file = square.charCodeAt(0) - 97;
   const rank = Number(square[1]) - 1;
@@ -66,8 +75,18 @@ export function Board({ fen, orientation, lastMove, classification, arrows, inCh
   const api = useRef<Api | null>(null);
   const movableRef = useRef(movable);
   movableRef.current = movable;
-  const [promotion, setPromotion] = useState<{ from: string; to: string; color: 'white' | 'black' } | null>(null);
+  const shownRef = useRef({ fen, orientation });
+  shownRef.current = { fen, orientation };
+  const [promotion, setPromotion] = useState<PendingPromotion | null>(null);
   const turn = fen.split(' ')[1] === 'b' ? 'black' : 'white';
+
+  // The picker belongs to the position it was opened in. If the game moves on
+  // underneath it (take back, stepping through moves, flipping the board), it
+  // is gone and the board must show the new position.
+  const pending = promotion && promotion.fen === fen && promotion.orientation === orientation ? promotion : null;
+  useEffect(() => {
+    if (promotion && !pending) setPromotion(null);
+  });
 
   useEffect(() => {
     if (!el.current) return;
@@ -85,7 +104,7 @@ export function Board({ fen, orientation, lastMove, classification, arrows, inCh
           after: (orig, dest) => {
             const m = movableRef.current;
             if (!m) return;
-            if (m.isPromotion(orig, dest)) setPromotion({ from: orig, to: dest, color: m.color ?? 'white' });
+            if (m.isPromotion(orig, dest)) setPromotion({ from: orig, to: dest, color: m.color ?? 'white', ...shownRef.current });
             else m.onMove(orig + dest);
           },
         },
@@ -99,17 +118,14 @@ export function Board({ fen, orientation, lastMove, classification, arrows, inCh
   }, []);
 
   const destsKey = movable ? `${movable.color}|${[...movable.dests].map(([k, v]) => k + v.join('')).join()}` : '';
-  const promotionOpen = useRef(false);
-  promotionOpen.current = promotion !== null;
 
-  // A pending promotion is abandoned only when the position itself changes.
-  useEffect(() => setPromotion(null), [fen, orientation]);
-
+  // Sync the board with the position. While a promotion is being chosen the
+  // pawn stays where it was dropped; once the picker closes (piece chosen,
+  // cancelled, or abandoned because the position changed) this runs again.
   useEffect(() => {
     const cg = api.current;
     if (!cg) return;
-    if (promotionOpen.current) {
-      // Keep the pawn where the user dropped it while they pick a piece.
+    if (pending) {
       cg.setAutoShapes(arrows.map((a): DrawShape => ({ orig: a.from as Key, dest: a.to as Key, brush: a.classification })));
       return;
     }
@@ -122,15 +138,26 @@ export function Board({ fen, orientation, lastMove, classification, arrows, inCh
       movable: { color: movable?.color, dests: (movable?.dests ?? new Map()) as Map<Key, Key[]> },
     });
     cg.setAutoShapes(arrows.map((a): DrawShape => ({ orig: a.from as Key, dest: a.to as Key, brush: a.classification })));
-  }, [fen, orientation, inCheck, lastMove?.[0], lastMove?.[1], arrows.map((a) => a.from + a.to + a.classification).join(), destsKey]);
+  }, [fen, orientation, inCheck, lastMove?.[0], lastMove?.[1], arrows.map((a) => a.from + a.to + a.classification).join(), destsKey, !!pending]);
 
   const choosePromotion = (piece: string | null) => {
-    const p = promotion;
-    setPromotion(null);
-    if (!p) return;
-    if (piece) movableRef.current?.onMove(p.from + p.to + piece);
-    else api.current?.set({ fen, lastMove: lastMove as Key[] | undefined }); // cancelled: put the pawn back
+    const p = pending;
+    setPromotion(null); // closing the picker re-syncs the board (puts the pawn back if cancelled)
+    if (p && piece) movableRef.current?.onMove(p.from + p.to + piece);
   };
+
+  // Esc cancels the picker (and nothing else: it must not also leave a side line).
+  useEffect(() => {
+    if (!pending) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setPromotion(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [!!pending]);
 
   const badgeSquare = lastMove?.[1];
   const pos = badgeSquare ? squarePosition(badgeSquare, orientation) : null;
@@ -148,13 +175,13 @@ export function Board({ fen, orientation, lastMove, classification, arrows, inCh
           <Badge c={classification} size="var(--badge)" title={false} />
         </div>
       )}
-      {promotion && (
+      {pending && (
         <div class="promo-backdrop" onClick={() => choosePromotion(null)}>
           <div class="promo cg-wrap" role="dialog" aria-label="Promote to" onClick={(e) => e.stopPropagation()}>
             {PROMOTION_PIECES.map(([letter, role]) => (
               <button key={letter} type="button" class="promo-btn" onClick={() => choosePromotion(letter)} aria-label={`Promote to ${role}`}>
                 {/* chessground's <piece> element, so its piece-set CSS draws the icon */}
-                {h('piece', { class: `${role} ${promotion.color}` })}
+                {h('piece', { class: `${role} ${pending.color}` })}
               </button>
             ))}
           </div>

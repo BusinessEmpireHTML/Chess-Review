@@ -1,7 +1,27 @@
 import { Chess } from 'chess.js';
 import type { BotLevel } from '../config/play';
+import { legalUcis, replay } from './explore';
 import { uciToMove } from './material';
 import type { Color } from './types';
+
+const START_FEN = new Chess().fen();
+
+/**
+ * Add the user's move to the game only if it is their turn and the move is
+ * legal in the actual position; otherwise return the same array untouched.
+ * The board can briefly lag the game (e.g. a take-back while the promotion
+ * picker is open), so moves coming from it are never trusted blindly.
+ */
+export function appendUserMove(moves: string[], uci: string, userColor: Color, startFen: string = START_FEN): string[] {
+  let chess: Chess;
+  try {
+    chess = replay(startFen, moves);
+  } catch {
+    return moves;
+  }
+  if (chess.turn() !== userColor || chess.isGameOver()) return moves;
+  return legalUcis(chess.fen()).includes(uci) ? [...moves, uci] : moves;
+}
 
 export type ResultReason = 'checkmate' | 'stalemate' | 'repetition' | 'insufficient' | 'fifty-move' | 'resignation';
 

@@ -5,7 +5,7 @@ import { getInteractiveEngine } from '../engine/interactive';
 import type { EngineFlavor } from '../engine/pool';
 import { pickBotMove } from '../lib/botpick';
 import { isPromotion, legalDests, legalUcis, replay } from '../lib/explore';
-import { botName, buildPlayPgn, describeResult, detectResult, resignation } from '../lib/play';
+import { appendUserMove, botName, buildPlayPgn, describeResult, detectResult, resignation } from '../lib/play';
 import { gameFingerprint, parseGame, type Ply } from '../lib/pgn';
 import { save } from '../lib/storage';
 import type { Color } from '../lib/types';
@@ -186,7 +186,7 @@ export function Play({ initial, flavor, onReview, onNewGame }: Props) {
               dests: yourTurn ? legalDests(fen) : new Map(),
               isPromotion: (from, to) => isPromotion(fen, from, to),
               onMove: (uci) => {
-                if (!result && turn === you) setMoves((m) => [...m, uci]);
+                if (!resigned) setMoves((m) => appendUserMove(m, uci, you));
               },
             }}
           />
